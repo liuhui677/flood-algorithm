@@ -1,3 +1,5 @@
+import canvasObserver from './canvasOserver';
+
 const PI2 = Math.PI * 2;
 const isCircle = (iArc: Arc) => {
 	if (!(iArc instanceof Arc)) {
@@ -55,7 +57,7 @@ function deduplicateArrayList(arrList: (Arc | Segment)[][]) {
 /**
  * 点位扩展
  */
-class pointExpand {
+export class pointExpand {
 	static visitPoints = new Set<pointExpand>();
 	/**点 */
 	protected mPoint: Point;
@@ -375,6 +377,16 @@ class PointMatrix {
 		setConnect(pe1, 1);
 	}
 	/**
+	 * 找到下一个可用的点位
+	 */
+	public findNextNotUsedPoint(nextPoint: pointExpand) {
+		while (!nextPoint && this.prePoints.length > 0) {
+			this.prePoints.pop();
+			nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
+		}
+		return nextPoint;
+	}
+	/**
 	 * @returns 根据网格找到所有的点位
 	 */
 	public findAllPolygons() {
@@ -383,47 +395,42 @@ class PointMatrix {
 		const visitPoints = pointExpand.visitPoints;
 		visitPoints.clear();
 		let notUsedPoint = this.findNotUsedPoint();
-		// 记录一下查找路径以便调试
-		let path: pointExpand[] = [];
 		// 这里是找到未使用的点
-		while (notUsedPoint) {
-			const shapes = new Set<Arc | Segment>();
-			let nextPoint = notUsedPoint;
-			// 如果存在下一个,那么就需要继续向下找
-			while (nextPoint) {
-				path.push(nextPoint);
-				nextPoint.setIsUsed(true);
-				if (visitPoints.has(nextPoint)) {
-					// 去寻找上一个
-					nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
-					while (!nextPoint && this.prePoints.length > 0) {
-						this.prePoints.pop();
+		const getPolygon = (notUsedPoint: pointExpand) => {
+			while (notUsedPoint) {
+				const shapes = new Set<Arc | Segment>();
+				let nextPoint = notUsedPoint;
+				// 如果存在下一个,那么就需要继续向下找
+				while (nextPoint) {
+					nextPoint.setIsUsed(true);
+					if (visitPoints.has(nextPoint)) {
+						// 去寻找上一个
 						nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
-					}
-				} else {
-					visitPoints.add(nextPoint);
-					if (nextPoint.endpointType === 1) {
-						shapes.add(nextPoint.shape as Segment | Arc);
-					}
-					if (nextPoint.endpointType !== 0) {
-						// 返回上一个1
-						nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
-						while (!nextPoint && this.prePoints.length > 0) {
-							this.prePoints.pop();
-							nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
-						}
+						nextPoint = this.findNextNotUsedPoint(nextPoint);
 					} else {
-						this.prePoints.push(nextPoint);
-						nextPoint = nextPoint.getNextPoint();
+						visitPoints.add(nextPoint);
+						if (nextPoint.endpointType === 1) {
+							shapes.add(nextPoint.shape as Segment | Arc);
+						}
+						if (nextPoint.endpointType !== 0) {
+							// 返回上一个1
+							nextPoint = this.prePoints[this.prePoints.length - 1]?.getNextPoint();
+							nextPoint = this.findNextNotUsedPoint(nextPoint);
+						} else {
+							this.prePoints.push(nextPoint);
+							nextPoint = nextPoint.getNextPoint();
+							nextPoint = this.findNextNotUsedPoint(nextPoint);
+						}
 					}
 				}
+				polygons.push(shapes);
+				// 找到一次封闭图形,或者查找完成之后,重置部分VisitPoints
+				pointExpand.clearVisitPointsOfTypeNo0();
+				this.prePoints = [];
+				notUsedPoint = this.findNotUsedPoint();
 			}
-			polygons.push(shapes);
-			// 找到一次封闭图形,或者查找完成之后,重置部分VisitPoints
-			pointExpand.clearVisitPointsOfTypeNo0();
-			this.prePoints = [];
-			notUsedPoint = this.findNotUsedPoint();
-		}
+		};
+		getPolygon(notUsedPoint);
 		return deduplicateArrayList(polygons.map((item) => Array.from(item)));
 	}
 }
