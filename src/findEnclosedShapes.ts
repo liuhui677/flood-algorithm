@@ -1,5 +1,3 @@
-import canvasObserver from './canvasOserver';
-
 const PI2 = Math.PI * 2;
 const isCircle = (iArc: Arc) => {
 	if (!(iArc instanceof Arc)) {
@@ -12,6 +10,53 @@ const isCircle = (iArc: Arc) => {
 };
 export const dedupeByEQ0 = (list: number[]) => list.filter((v, i) => i === 0 || !Utils.EQ_0(v - list[i - 1]));
 export const round3 = (n: number) => (Math.round(n * 1000) / 1000).toFixed(3);
+const getEdgeShapes = (polygon: Polygon): (Segment | Arc)[] => {
+	return Array.from(polygon.edges).map((edge: PolygonEdge) => edge.shape);
+};
+const reorderPolygonEdges = (polygon: Polygon): Polygon => {
+	if (polygon.isEmpty()) return polygon;
+	const edges = getEdgeShapes(polygon);
+	const vertices = Array.from(polygon.vertices);
+	const startVertex = vertices.reduce((best, pt) => {
+		if (!best) {
+			return pt;
+		}
+		if (Utils.LT(pt.y, best.y) || (Utils.EQ(pt.y, best.y) && Utils.LT(pt.x, best.x))) {
+			return pt;
+		}
+		return best;
+	}, vertices[0]);
+	const orderedEdges: (Segment | Arc)[] = [];
+	const used = new Array(edges.length).fill(false);
+	let currentPoint = startVertex;
+
+	for (let i = 0; i < edges.length; i++) {
+		const nextIndex = edges.findIndex((shape, idx) => !used[idx] && shape.start.equalTo(currentPoint));
+		if (nextIndex < 0) {
+			return this;
+		}
+		orderedEdges.push(edges[nextIndex]);
+		used[nextIndex] = true;
+		currentPoint = edges[nextIndex].end;
+	}
+
+	return new Polygon(orderedEdges);
+};
+const stringKey = (polygon: Polygon, iPrecision: number = 3): string => {
+	if (polygon.isEmpty()) return '';
+	const tmpPolygon = reorderPolygonEdges(polygon);
+	let key = '';
+	const shapes = getEdgeShapes(tmpPolygon);
+	shapes.forEach((shape) => {
+		if (shape instanceof Segment) {
+			key += getUniqueKey(shape) + ',';
+		}
+		if (shape instanceof Arc) {
+			key += getUniqueKey(shape) + ',';
+		}
+	});
+	return key;
+};
 /**
  *
  * @param iShape 生成唯一key
@@ -436,6 +481,7 @@ class PointMatrix {
 }
 import { Line } from '@flatten-js/core';
 import { BooleanOperations } from '@flatten-js/core';
+import { PolygonEdge } from '@flatten-js/core';
 import { Box } from '@flatten-js/core';
 import { Polygon } from '@flatten-js/core';
 import { Vector } from '@flatten-js/core';
@@ -789,6 +835,12 @@ export class findPolygons {
 		if (xList.length > 1 && yList.length > 1) {
 			matrix.box = new Box(xList[0], yList[0], xList[xList.length - 1], yList[yList.length - 1]);
 		}
+		const shortShapes: (Segment | Arc)[] = [];
+		iShapes.forEach((shape) => {
+			if (shape.length < 0.002) {
+				shortShapes.push(shape);
+			}
+		});
 		xList.forEach((x, indexx) => {
 			yList.forEach((y, indexy) => {
 				const p = new Point(x, y);
@@ -806,6 +858,16 @@ export class findPolygons {
 							pe.shape = shape;
 						}
 					});
+				}
+				if (shortShapes.length > 0 && pe.endpointType === 2) {
+					for (let index = 0; index < shortShapes.length; index++) {
+						const shortShape = shortShapes[index];
+						if (shortShape.start.equalTo(pe.point) || shortShape.end.equalTo(pe.point)) {
+							pe.endpointType = 1;
+							pe.shape = [shortShape];
+							break;
+						}
+					}
 				}
 				matrix.push(pe, indexx, indexy);
 			});
@@ -874,11 +936,17 @@ export class findPolygons {
 		const shapes = matrix.findAllPolygons();
 		console.log('第五步,找到根据边创建封闭图形', shapes);
 		const polygons = findPolygons.findEnclosedShapes(shapes);
+		// polygons 取宠
+		const polygonMap = new Map<string, Polygon>();
+		polygons.forEach((polygon) => {
+			// 这里要实现一个生成多边形唯一Key的方法
+			polygonMap.set(stringKey(polygon), polygon);
+		});
 		// console.log('结束,查询封闭图形完成')
 		console.timeEnd('findPolygons');
 		console.log('polygons', polygons);
 		return {
-			polygons,
+			polygons: Array.from(polygonMap.values()),
 			matrix,
 		};
 	}
