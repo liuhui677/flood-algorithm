@@ -1,12 +1,10 @@
 import { Line } from '@flatten-js/core';
 import { Polygon } from '@flatten-js/core';
 import { PolygonEdge } from '@flatten-js/core';
-import { Vector } from '@flatten-js/core';
 import { BooleanOperations } from '@flatten-js/core';
 import { Point } from '@flatten-js/core';
 import { Utils } from '@flatten-js/core';
 import { Segment, Arc } from '@flatten-js/core';
-import { utils } from 'mocha';
 
 export const round4 = (n: number) => (Math.round(n * 1000000) / 1000000).toFixed(6);
 function getPointKey(iPoint: Point) {
