@@ -1,3 +1,12 @@
+import { Line } from '@flatten-js/core';
+import { BooleanOperations } from '@flatten-js/core';
+import { Box } from '@flatten-js/core';
+import { Polygon } from '@flatten-js/core';
+import { Vector } from '@flatten-js/core';
+import { Segment, Point, Arc, Utils } from '@flatten-js/core';
+import canvasObserver from './canvasOserver';
+import Konva from 'konva';
+import { Relations } from '@flatten-js/core';
 const PI2 = Math.PI * 2;
 const isCircle = (iArc: Arc) => {
 	if (!(iArc instanceof Arc)) {
@@ -8,55 +17,18 @@ const isCircle = (iArc: Arc) => {
 	}
 	return false;
 };
-export const dedupeByEQ0 = (list: number[]) => list.filter((v, i) => i === 0 || !Utils.EQ_0(v - list[i - 1]));
-export const round3 = (n: number) => (Math.round(n * 1000) / 1000).toFixed(3);
-const getEdgeShapes = (polygon: Polygon): (Segment | Arc)[] => {
-	return Array.from(polygon.edges).map((edge: PolygonEdge) => edge.shape);
-};
-const reorderPolygonEdges = (polygon: Polygon): Polygon => {
-	if (polygon.isEmpty()) return polygon;
-	const edges = getEdgeShapes(polygon);
-	const vertices = Array.from(polygon.vertices);
-	const startVertex = vertices.reduce((best, pt) => {
-		if (!best) {
-			return pt;
+export const dedupeByEQ0 = (list: number[]) => {
+	const result: number[] = [];
+	let lastValue: number | undefined = undefined;
+	for (let i = 0; i < list.length; i++) {
+		if (i === 0 || (lastValue !== undefined && !Utils.EQ_0(list[i] - lastValue))) {
+			lastValue = list[i];
+			result.push(list[i]);
 		}
-		if (Utils.LT(pt.y, best.y) || (Utils.EQ(pt.y, best.y) && Utils.LT(pt.x, best.x))) {
-			return pt;
-		}
-		return best;
-	}, vertices[0]);
-	const orderedEdges: (Segment | Arc)[] = [];
-	const used = new Array(edges.length).fill(false);
-	let currentPoint = startVertex;
-
-	for (let i = 0; i < edges.length; i++) {
-		const nextIndex = edges.findIndex((shape, idx) => !used[idx] && shape.start.equalTo(currentPoint));
-		if (nextIndex < 0) {
-			return this;
-		}
-		orderedEdges.push(edges[nextIndex]);
-		used[nextIndex] = true;
-		currentPoint = edges[nextIndex].end;
 	}
-
-	return new Polygon(orderedEdges);
+	return result;
 };
-const stringKey = (polygon: Polygon, iPrecision: number = 3): string => {
-	if (polygon.isEmpty()) return '';
-	const tmpPolygon = reorderPolygonEdges(polygon);
-	let key = '';
-	const shapes = getEdgeShapes(tmpPolygon);
-	shapes.forEach((shape) => {
-		if (shape instanceof Segment) {
-			key += getUniqueKey(shape) + ',';
-		}
-		if (shape instanceof Arc) {
-			key += getUniqueKey(shape) + ',';
-		}
-	});
-	return key;
-};
+export const round3 = (n: number) => (Math.round(n * 1000) / 1000).toFixed(3);
 /**
  *
  * @param iShape 生成唯一key
@@ -447,6 +419,21 @@ class PointMatrix {
 				let nextPoint = notUsedPoint;
 				// 如果存在下一个,那么就需要继续向下找
 				while (nextPoint) {
+					let color = 'green';
+					if (nextPoint.endpointType === 1) {
+						color = 'yellow';
+					} else if (nextPoint.endpointType === 2) {
+						color = 'red';
+					}
+					const circle = new Konva.Circle({
+						x: nextPoint.point.x,
+						y: nextPoint.point.y,
+						radius: 2,
+						fill: color,
+						stroke: 'black',
+						strokeWidth: 1,
+					});
+					canvasObserver.layer.add(circle);
 					nextPoint.setIsUsed(true);
 					if (visitPoints.has(nextPoint)) {
 						// 去寻找上一个
@@ -455,7 +442,13 @@ class PointMatrix {
 					} else {
 						visitPoints.add(nextPoint);
 						if (nextPoint.endpointType === 1) {
-							shapes.add(nextPoint.shape as Segment | Arc);
+							if (Array.isArray(nextPoint.shape)) {
+								nextPoint.shape.forEach((shape) => {
+									shapes.add(shape);
+								});
+							} else {
+								shapes.add(nextPoint.shape as Segment | Arc);
+							}
 						}
 						if (nextPoint.endpointType !== 0) {
 							// 返回上一个1
@@ -468,6 +461,7 @@ class PointMatrix {
 						}
 					}
 				}
+				canvasObserver.stage.draw();
 				polygons.push(shapes);
 				// 找到一次封闭图形,或者查找完成之后,重置部分VisitPoints
 				pointExpand.clearVisitPointsOfTypeNo0();
@@ -479,13 +473,7 @@ class PointMatrix {
 		return deduplicateArrayList(polygons.map((item) => Array.from(item)));
 	}
 }
-import { Line } from '@flatten-js/core';
-import { BooleanOperations } from '@flatten-js/core';
-import { PolygonEdge } from '@flatten-js/core';
-import { Box } from '@flatten-js/core';
-import { Polygon } from '@flatten-js/core';
-import { Vector } from '@flatten-js/core';
-import { Segment, Point, Arc, Utils } from '@flatten-js/core';
+
 // 我现在要实现一个优化过后的洪水算法
 export class findPolygons {
 	constructor() {}
@@ -751,11 +739,11 @@ export class findPolygons {
 					ispolygon: boolean;
 				}[] = [];
 				let isfindNext = false;
+				let tempLastShape: {
+					shapes: (Segment | Arc)[];
+					ispolygon: boolean;
+				};
 				while (shapes.length > 0) {
-					let tempLastShape: {
-						shapes: (Segment | Arc)[];
-						ispolygon: boolean;
-					};
 					let shape: Segment | Arc;
 					if (tempLastShape?.ispolygon || !isfindNext) {
 						polygoShapes.push({ shapes: [shapes[0]], ispolygon: false });
@@ -853,9 +841,16 @@ export class findPolygons {
 				}
 				if (pe.endpointType === 0) {
 					iShapes.forEach((shape) => {
+						// 这里需要处理精度问题
 						if (shape.contains(p)) {
 							pe.endpointType === 0 ? (pe.endpointType = 1) : (pe.endpointType = 2);
-							pe.shape = shape;
+							if (!pe.shape) {
+								pe.shape = [shape];
+							} else if (Array.isArray(pe.shape)) {
+								pe.shape.push(shape);
+							} else {
+								pe.shape = [pe.shape, shape];
+							}
 						}
 					});
 				}
@@ -924,9 +919,13 @@ export class findPolygons {
 		return matrix;
 	};
 	public static findPolygons(iShapes: (Segment | Arc)[]) {
-		console.time('findPolygons');
+		// 先记录原本的精度,计算完成之后,再恢复回来
+		const originalEQ0 = Utils.getTolerance();
+		Utils.setTolerance(0.001);
+		// console.time('findPolygons');
 		// console.log('第一步,切割形状')
-		const newShapes = findPolygons.cutOffShape(iShapes);
+		// const newShapes = findPolygons.cutOffShape(iShapes)
+		const newShapes = iShapes;
 		// console.log('第二步,获取坐标')
 		const coordinates = findPolygons.getSortedCoordinates(newShapes);
 		// console.log('第三步,创建网格点')
@@ -934,19 +933,21 @@ export class findPolygons {
 		const matrix = findPolygons.createGridPoints(newShapes, coordinates.arcs, coordinates.xList, coordinates.yList, coordinates.keyMap);
 		// console.log('第四步,找到所有封闭图形的边')
 		const shapes = matrix.findAllPolygons();
-		console.log('第五步,找到根据边创建封闭图形', shapes);
+		// console.log('第五步,找到根据边创建封闭图形', shapes)
 		const polygons = findPolygons.findEnclosedShapes(shapes);
+		Utils.setTolerance(originalEQ0);
 		// polygons 取宠
-		const polygonMap = new Map<string, Polygon>();
-		polygons.forEach((polygon) => {
-			// 这里要实现一个生成多边形唯一Key的方法
-			polygonMap.set(stringKey(polygon), polygon);
-		});
+		// const polygonMap = new Map<string, Polygon>();
+		// polygons.forEach((polygon) => {
+		// 	polygonMap.set(polygon.stringKey(), polygon);
+		// });
+
+		console.log('polygons', Relations.equal(polygons[0], polygons[1]));
 		// console.log('结束,查询封闭图形完成')
-		console.timeEnd('findPolygons');
-		console.log('polygons', polygons);
+		// console.timeEnd('findPolygons');s
+		// console.log('polygons', polygons);
 		return {
-			polygons: Array.from(polygonMap.values()),
+			polygons,
 			matrix,
 		};
 	}

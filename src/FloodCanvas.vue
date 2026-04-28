@@ -99,7 +99,7 @@ const test = (isClear: boolean = false) => {
 	const group = new Konva.Group({
 		draggable: true,
 	});
-
+	group.draggable(true);
 	const { polygons } = findPolygons.findPolygons(shapes.value);
 
 	polygons.forEach((polygon, index) => {
