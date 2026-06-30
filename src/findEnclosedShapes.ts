@@ -631,18 +631,15 @@ export class findPolygons {
 			keyMap.set(pointExpand.getPointKey(shape.end), { type: 2 });
 			const midPt = shape.middle();
 			if (arcs.includes(shape)) {
-				const l = shape.length / 3;
-				const point1 = shape.pointAtLength(l);
-				if (point1) {
-					xList.push(point1.x);
-					yList.push(point1.y);
-					keyMap.set(pointExpand.getPointKey(point1), { type: 1, shape });
-				}
-				const point2 = shape.pointAtLength(l * 2);
-				if (point2) {
-					xList.push(point2.x);
-					yList.push(point2.y);
-					keyMap.set(pointExpand.getPointKey(point2), { type: 1, shape });
+				const count = 3;
+				const l = shape.length / count;
+				for (let index = 0; index < count; index++) {
+					const point = shape.pointAtLength(l * (index + 1));
+					if (point) {
+						xList.push(point.x);
+						yList.push(point.y);
+						keyMap.set(pointExpand.getPointKey(point), { type: 1, shape });
+					}
 				}
 				if (shape instanceof Arc) {
 					const box = shape.box;
@@ -817,7 +814,7 @@ export class findPolygons {
 				type: 0 | 1 | 2;
 				shape?: Segment | Arc;
 			}
-		>
+		>,
 	) => {
 		const matrix = new PointMatrix(xList.length, yList.length);
 		if (xList.length > 1 && yList.length > 1) {
@@ -942,7 +939,6 @@ export class findPolygons {
 		// 	polygonMap.set(polygon.stringKey(), polygon);
 		// });
 
-		console.log('polygons', Relations.equal(polygons[0], polygons[1]));
 		// console.log('结束,查询封闭图形完成')
 		// console.timeEnd('findPolygons');s
 		// console.log('polygons', polygons);

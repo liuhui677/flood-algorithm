@@ -64,7 +64,7 @@ const reorderPolygonEdges = (polygon: Polygon): Polygon => {
 	for (let i = 0; i < edges.length; i++) {
 		const nextIndex = edges.findIndex((shape, idx) => !used[idx] && shape.start.equalTo(currentPoint));
 		if (nextIndex < 0) {
-			return this;
+			return polygon;
 		}
 		orderedEdges.push(edges[nextIndex]);
 		used[nextIndex] = true;
@@ -274,7 +274,7 @@ class ScanLine {
 					for (let i = polygonShapeIndex; i < polygonShapes.length; i++) {
 						const polygonShape2 = polygonShapes[i];
 						if (this.areAdjacent(mergedPolygon, polygonShape2)) {
-							mergedPolygon = this.mergeTwoPolygons(mergedPolygon, polygonShape2);
+							mergedPolygons[mergedPolygonIndex] = this.mergeTwoPolygons(mergedPolygon, polygonShape2);
 							isMerged = true;
 						}
 					}
@@ -483,6 +483,12 @@ class ScanLine {
 }
 
 export const getPolygons = (iShapes: (Segment | Arc)[]) => {
-	const scanLine = new ScanLine(iShapes);
-	return scanLine.scanLine();
+	let pongoys: Polygon[] = [];
+	try {
+		const scanLine = new ScanLine(iShapes);
+		pongoys = scanLine.scanLine();
+	} catch (error) {
+		console.error(error);
+	}
+	return pongoys;
 };

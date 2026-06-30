@@ -7,6 +7,7 @@ import { findPolygons } from './findEnclosedShapes';
 import canvasObserver from './canvasOserver';
 import { demoData } from './demoData';
 import { Point } from '@flatten-js/core';
+import { getPolygons } from './scanLine';
 
 const selectedDemoIndex = ref(0);
 const demoData1 = demoData.reverse();
@@ -100,6 +101,8 @@ const test = (isClear: boolean = false) => {
 		draggable: true,
 	});
 	group.draggable(true);
+	// TODO:test 测试扫描线
+	getPolygons(shapes.value);
 	const { polygons } = findPolygons.findPolygons(shapes.value);
 
 	polygons.forEach((polygon, index) => {
