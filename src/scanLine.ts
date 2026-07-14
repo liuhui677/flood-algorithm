@@ -161,7 +161,7 @@ class ScanLine {
 				shapes.push(shape);
 			}
 		});
-		return { shapes, yminList: Array.from(yminList).sort((a, b) => a - b) };
+		return { shapes: shapes.filter((shape) => shape), yminList: Array.from(yminList).sort((a, b) => a - b) };
 	}
 	/**
 	 * 收集ET
@@ -251,7 +251,7 @@ class ScanLine {
 				shape: Segment;
 				key: string;
 			}[];
-		}[]
+		}[],
 	) {
 		const shapeMap: Set<Segment | Arc>[] = [];
 		const mergedPolygons: {

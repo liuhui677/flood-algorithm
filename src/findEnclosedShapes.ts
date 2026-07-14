@@ -8,6 +8,7 @@ import canvasObserver from './canvasOserver';
 import Konva from 'konva';
 import { Relations } from '@flatten-js/core';
 const PI2 = Math.PI * 2;
+const MAX_GRID_STEP = 50;
 const isCircle = (iArc: Arc) => {
 	if (!(iArc instanceof Arc)) {
 		return false;
@@ -631,7 +632,7 @@ export class findPolygons {
 			keyMap.set(pointExpand.getPointKey(shape.end), { type: 2 });
 			const midPt = shape.middle();
 			if (arcs.includes(shape)) {
-				const count = 3;
+				const count = Math.ceil(shape.length / MAX_GRID_STEP);
 				const l = shape.length / count;
 				for (let index = 0; index < count; index++) {
 					const point = shape.pointAtLength(l * (index + 1));

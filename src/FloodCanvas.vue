@@ -102,7 +102,7 @@ const test = (isClear: boolean = false) => {
 	});
 	group.draggable(true);
 	// TODO:test 测试扫描线
-	getPolygons(shapes.value);
+	// const polygons = getPolygons(shapes.value);
 	const { polygons } = findPolygons.findPolygons(shapes.value);
 
 	polygons.forEach((polygon, index) => {
