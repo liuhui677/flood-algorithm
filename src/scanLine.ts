@@ -57,11 +57,6 @@ function alignClosedChain(chain: (Segment | Arc)[]): (Segment | Arc)[] {
 		aligned.push(shape);
 		cursor = shape.end;
 	}
-	const firstStart = aligned[0].start;
-	const last = aligned[aligned.length - 1];
-	if (last.end.equalTo(firstStart) && !last.end.equalTo(firstStart)) {
-		aligned[aligned.length - 1] = snapShapeEnd(last, firstStart);
-	}
 	return aligned;
 }
 
@@ -600,7 +595,8 @@ class ScanLine {
 						Array.from(s).forEach((shape) => {
 							set.add(shape);
 						});
-						Array.from(s).forEach((virtualLine) => {
+						const virtualLines = intermediateState.get(s)!;
+						Array.from(virtualLines).forEach((virtualLine) => {
 							keys.add(virtualLine);
 						});
 						intermediateState.delete(s);
