@@ -145,6 +145,67 @@ const boundaryPairOk = (ea: Segment | Arc, eb: Segment | Arc, sharedKey: string)
 	return Math.abs(cross) / mag < 0.15 && dot < 0;
 };
 
+/** 首尾相接且共线/同圆同向 → 合并为一条边 */
+function mergeTwoConsecutive(a: Segment | Arc, b: Segment | Arc): Segment | Arc | null {
+	if (!a.end.equalTo(b.start) && endpointKey(a.end) !== endpointKey(b.start)) {
+		return null;
+	}
+	const sharedKey = endpointKey(a.end);
+	if (!boundaryPairOk(a, b, sharedKey)) {
+		return null;
+	}
+	if (a instanceof Segment && b instanceof Segment) {
+		return new Segment(a.start, b.end);
+	}
+	if (a instanceof Arc && b instanceof Arc) {
+		if (a.counterClockwise !== b.counterClockwise) {
+			return null;
+		}
+		return new Arc(a.center, Number(a.r), a.startAngle, b.endAngle, a.counterClockwise);
+	}
+	return null;
+}
+
+/** 成环链上合并相邻共线线段 / 同圆同向圆弧 (含首尾相接) */
+function simplifyChainEdges(chain: (Segment | Arc)[]): (Segment | Arc)[] {
+	if (chain.length < 2) {
+		return chain;
+	}
+	let edges = [...chain];
+	let changed = true;
+	while (changed) {
+		changed = false;
+		const next: (Segment | Arc)[] = [];
+		for (const shape of edges) {
+			if (next.length === 0) {
+				next.push(shape);
+				continue;
+			}
+			const merged = mergeTwoConsecutive(next[next.length - 1], shape);
+			if (merged) {
+				next[next.length - 1] = merged;
+				changed = true;
+			} else {
+				next.push(shape);
+			}
+		}
+		if (next.length >= 2) {
+			const closedMerged = mergeTwoConsecutive(next[next.length - 1], next[0]);
+			if (closedMerged) {
+				next[0] = closedMerged;
+				next.pop();
+				changed = true;
+			}
+		}
+		edges = next;
+	}
+	return edges;
+}
+
+function closedChainToPolygon(shapes: (Segment | Arc)[]): Polygon {
+	return new Polygon(simplifyChainEdges(alignClosedChain(shapes)));
+}
+
 /** 过滤 split 结果中的空/退化片段 */
 function validSplitPieces(splitResults: (Segment | Arc | null | undefined)[]): (Segment | Arc)[] {
 	return splitResults.filter((item): item is Segment | Arc => {
@@ -626,12 +687,12 @@ class ScanLine {
 				}
 				const polygonShapes = polygoShapes.filter((item) => item.ispolygon);
 				if (polygonShapes.length === 1) {
-					const polygon = new Polygon(alignClosedChain(polygonShapes[0].shapes));
+					const polygon = closedChainToPolygon(polygonShapes[0].shapes);
 					polygons.set(stringKey(polygon), polygon);
 				} else if (polygonShapes.length > 1) {
 					// 可能存在超过两个,找出面积最大的.一定是嵌套的情况可以对比box,甚至可以对比,yMAX 最大的一个
 					const tempPolgons = polygonShapes
-						.map((item) => new Polygon(alignClosedChain(item.shapes)))
+						.map((item) => closedChainToPolygon(item.shapes))
 						.sort((a, b) => {
 							const ymaxa = a.box.ymax;
 							const ymaxb = b.box.ymax;
