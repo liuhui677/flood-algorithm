@@ -426,15 +426,15 @@ class PointMatrix {
 					} else if (nextPoint.endpointType === 2) {
 						color = 'red';
 					}
-					const circle = new Konva.Circle({
-						x: nextPoint.point.x,
-						y: nextPoint.point.y,
-						radius: 2,
-						fill: color,
-						stroke: 'black',
-						strokeWidth: 1,
-					});
-					canvasObserver.layer.add(circle);
+					// const circle = new Konva.Circle({
+					// 	x: nextPoint.point.x,
+					// 	y: nextPoint.point.y,
+					// 	radius: 2,
+					// 	fill: color,
+					// 	stroke: 'black',
+					// 	strokeWidth: 1,
+					// });
+					// canvasObserver.layer.add(circle);
 					nextPoint.setIsUsed(true);
 					if (visitPoints.has(nextPoint)) {
 						// 去寻找上一个

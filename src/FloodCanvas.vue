@@ -10,8 +10,8 @@ import { Point } from '@flatten-js/core';
 import { getPolygons } from './scanLine';
 
 const selectedDemoIndex = ref(0);
-const demoData1 = demoData.reverse();
-const shapes = computed(() => demoData1[selectedDemoIndex.value]);
+const demoData1 = [...demoData].reverse();
+const shapes = computed(() => demoData1[selectedDemoIndex.value].shapes);
 
 const toolbarRef = ref<HTMLElement | null>(null);
 const canvasHeight = ref(0);
@@ -50,7 +50,7 @@ const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
 	stage.batchDraw();
 };
 // 选中的颜色
-const selectedColor = ref('#FFFDE7');
+const selectedColor = ref('#eba01f');
 /**
  * 点击的点
  */
@@ -79,50 +79,61 @@ onBeforeUnmount(() => {
 });
 
 const planColors = [
-	{ name: '浅薄荷绿', color: '#E6F7F0' },
-	{ name: '柔灰蓝色', color: '#C8E6C9' },
-	{ name: '暖米杏色', color: '#FFF8E1' },
-	{ name: '浅薰衣草紫', color: '#F3E5F5' },
-	{ name: '柔珊瑚粉', color: '#FCE4EC' },
-	{ name: '淡柠黄色', color: '#FFFDE7' },
-	{ name: '雾霾蓝', color: '#BBDEFB' },
-	{ name: '柔灰蓝色', color: '#E0E8F0' },
-	{ name: '暖桃粉色', color: '#FFF3E0' },
-	{ name: '浅豆绿色', color: '#E8F5E9' },
+	'#66BB6A',
+	'#42A5F5',
+	'#FFA726',
+	'#AB47BC',
+	'#EF5350',
+	'#26C6DA',
+	'#EC407A',
+	'#8D6E63',
+	'#78909C',
+	'#9CCC65',
+	'#5C6BC0',
+	'#FFEE58',
 ];
 
-const test = (isClear: boolean = false) => {
-	if (isClear) {
-		selectedPoint = null;
-	}
-	// 清空图层
-	canvasObserver.layer.destroyChildren();
-	const group = new Konva.Group({
-		draggable: true,
+const getShapesBounds = (list: (Segment | Arc)[]) => {
+	let minX = Infinity;
+	let maxX = -Infinity;
+	let minY = Infinity;
+	let maxY = -Infinity;
+	list.forEach((shape) => {
+		if (shape instanceof Segment) {
+			minX = Math.min(minX, shape.start.x, shape.end.x);
+			maxX = Math.max(maxX, shape.start.x, shape.end.x);
+			minY = Math.min(minY, shape.start.y, shape.end.y);
+			maxY = Math.max(maxY, shape.start.y, shape.end.y);
+		} else if (shape instanceof Arc) {
+			const r = Number(shape.r);
+			const cx = shape.center.x;
+			const cy = shape.center.y;
+			minX = Math.min(minX, cx - r);
+			maxX = Math.max(maxX, cx + r);
+			minY = Math.min(minY, cy - r);
+			maxY = Math.max(maxY, cy + r);
+		}
 	});
-	group.draggable(true);
-	// TODO:test 测试扫描线
-	// const polygons = getPolygons(shapes.value);
-	const { polygons } = findPolygons.findPolygons(shapes.value);
+	return { minX, maxX, minY, maxY };
+};
 
+/** 扫描线结果相对洪水算法结果的水平偏移量（随当前 demo 包围盒计算） */
+let scanLineOffsetX = 0;
+
+const addPolygonShapes = (group: Konva.Group, polygons: any[], hitPoint: Point | null) => {
 	polygons.forEach((polygon, index) => {
 		const faces = Array.from(polygon.faces) as any[];
-		// 外轮廓；其余 face 均为洞（支持多个洞）。用 faces 逐面取 shapes，不用 polygon.edges（所有面的边混在一起）
 		const face1 = faces[0]?.shapes ?? [];
 		const holeFaces = faces.slice(1).map((f) => f?.shapes ?? []);
-		let fillColor = 'rgba(0, 0, 0, 0)';
-		if (selectedPoint && polygon.contains(selectedPoint)) {
+		let fillColor = planColors[index % planColors.length];
+		if (hitPoint && polygon.contains(hitPoint)) {
 			fillColor = selectedColor.value;
 		}
-		// 后面我要添加一个油漆桶功能,来改变颜色
 		const shape = new Konva.Shape({
 			fill: fillColor,
 			strokeWidth: 2 / canvasObserver.multiple,
-			opacity: 1,
-			/// 有图片渲染图片
-			// fillPatternImage: image ?? void 0,
+			opacity: 0.75,
 			sceneFunc: function (context, shape) {
-				// 方法1：先绘制主多边形并填充
 				context.beginPath();
 				let isFirstPoint = true;
 				for (const shapeItem of face1) {
@@ -146,12 +157,10 @@ const test = (isClear: boolean = false) => {
 				}
 				context.closePath();
 
-				// 填充主多边形
 				context.fillStyle = fillColor;
 				context.globalAlpha = shape.opacity();
 				context.fill();
 
-				// 使用 destination-out 逐个挖掉所有洞
 				context.save();
 				context.globalCompositeOperation = 'destination-out';
 				context.globalAlpha = 1.0;
@@ -189,101 +198,114 @@ const test = (isClear: boolean = false) => {
 		});
 		group.add(shape);
 	});
-	// 后画线
-	shapes.value.forEach((shape) => {
+};
+
+const addEdgeShapes = (group: Konva.Group, list: (Segment | Arc)[]) => {
+	list.forEach((shape) => {
 		if (shape instanceof Segment) {
-			const line = new Konva.Line({
-				points: [shape.start.x, shape.start.y, shape.end.x, shape.end.y],
-				stroke: 'black',
-				strokeWidth: 2 / canvasObserver.multiple,
-			});
-			group.add(line);
+			group.add(
+				new Konva.Line({
+					points: [shape.start.x, shape.start.y, shape.end.x, shape.end.y],
+					stroke: 'black',
+					strokeWidth: 2 / canvasObserver.multiple,
+				}),
+			);
 		} else {
 			const r = Number(shape.r);
-			const arc = new Konva.Arc({
-				x: shape.center.x,
-				y: shape.center.y,
-				innerRadius: r,
-				outerRadius: r,
-				angle: ((shape.endAngle - shape.startAngle) * 180) / Math.PI,
-				rotation: (shape.startAngle * 180) / Math.PI,
-				fill: 'black',
-				stroke: 'black',
-				strokeWidth: 0.5,
-				clockwise: !shape.counterClockwise,
-			});
-			group.add(arc);
+			group.add(
+				new Konva.Arc({
+					x: shape.center.x,
+					y: shape.center.y,
+					innerRadius: r,
+					outerRadius: r,
+					angle: ((shape.endAngle - shape.startAngle) * 180) / Math.PI,
+					rotation: (shape.startAngle * 180) / Math.PI,
+					fill: 'black',
+					stroke: 'black',
+					strokeWidth: 0.5,
+					clockwise: !shape.counterClockwise,
+				}),
+			);
 		}
 	});
-	// 将形状添加到图层
-	canvasObserver.layer.add(group);
+};
+
+const test = (isClear: boolean = false) => {
+	if (isClear) {
+		selectedPoint = null;
+	}
+	canvasObserver.layer.destroyChildren();
+
+	const list = shapes.value;
+	const bounds = getShapesBounds(list);
+	const worldWidth = bounds.maxX - bounds.minX;
+	scanLineOffsetX = Number.isFinite(worldWidth) && worldWidth > 0 ? worldWidth + Math.max(worldWidth * 0.2, 100) : 500;
+
+	const scanPolygons = getPolygons(list);
+	const { polygons: floodPolygons } = findPolygons.findPolygons(list);
+
+	// 左侧：洪水算法；右侧：扫描线（水平偏移，避免重叠）
+	const floodGroup = new Konva.Group({ draggable: true });
+	const scanGroup = new Konva.Group({ draggable: true, x: scanLineOffsetX });
+
+	const floodHitPoint = selectedPoint;
+	const scanHitPoint =
+		selectedPoint != null ? new Point(selectedPoint.x - scanLineOffsetX, selectedPoint.y) : null;
+
+	addPolygonShapes(floodGroup, floodPolygons, floodHitPoint);
+	addEdgeShapes(floodGroup, list);
+
+	addPolygonShapes(scanGroup, scanPolygons, scanHitPoint);
+	addEdgeShapes(scanGroup, list);
+
+	canvasObserver.layer.add(floodGroup);
+	canvasObserver.layer.add(scanGroup);
 	canvasObserver.stage.draw();
 };
 
-// 根据当前图形自动缩放并居中
+// 根据当前图形自动缩放并居中（包含左侧洪水结果 + 右侧扫描线结果）
 const fitViewToShapes = () => {
 	const stage = canvasObserver.stage;
 	if (!stage) return;
 	const list = shapes.value;
 	if (!list || list.length === 0) return;
 
-	// 计算所有图形的包围盒
-	let minX = Infinity;
-	let maxX = -Infinity;
-	let minY = Infinity;
-	let maxY = -Infinity;
-
-	list.forEach((shape) => {
-		if (shape instanceof Segment) {
-			minX = Math.min(minX, shape.start.x, shape.end.x);
-			maxX = Math.max(maxX, shape.start.x, shape.end.x);
-			minY = Math.min(minY, shape.start.y, shape.end.y);
-			maxY = Math.max(maxY, shape.start.y, shape.end.y);
-		} else if (shape instanceof Arc) {
-			const r = Number(shape.r);
-			const cx = shape.center.x;
-			const cy = shape.center.y;
-			minX = Math.min(minX, cx - r);
-			maxX = Math.max(maxX, cx + r);
-			minY = Math.min(minY, cy - r);
-			maxY = Math.max(maxY, cy + r);
-		}
-	});
-
+	const { minX, maxX, minY, maxY } = getShapesBounds(list);
 	if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) return;
 
-	const worldWidth = maxX - minX;
-	const worldHeight = maxY - minY;
+	// 右侧扫描线组已水平偏移，扩展包围盒
+	const viewMinX = minX;
+	const viewMaxX = maxX + scanLineOffsetX;
+	const viewMinY = minY;
+	const viewMaxY = maxY;
+
+	const worldWidth = viewMaxX - viewMinX;
+	const worldHeight = viewMaxY - viewMinY;
 	if (worldWidth === 0 || worldHeight === 0) return;
 
 	const canvasWidth = stage.width();
 	const canvasHeight = stage.height();
 	const canvasMin = Math.min(canvasWidth, canvasHeight);
 
-	// 让包围盒的最小边大约占画布较小边的 20%
 	const worldMin = Math.min(worldWidth, worldHeight);
 	const targetScreenSize = canvasMin * 0.2;
 	let scale = targetScreenSize / worldMin;
 
-	// 略加保护，避免缩放过大/过小
 	const minScale = 0.1;
 	const maxScale = 10;
 	scale = Math.max(minScale, Math.min(maxScale, scale));
 
-	// 重新设置缩放（注意 Y 轴取反）
 	stage.scale({ x: scale, y: -scale });
 
-	// 将包围盒中心移动到画布中心
-	const cx = (minX + maxX) / 2;
-	const cy = (minY + maxY) / 2;
+	const cx = (viewMinX + viewMaxX) / 2;
+	const cy = (viewMinY + viewMaxY) / 2;
 	const centerScreenX = canvasWidth / 2;
 	const centerScreenY = canvasHeight / 2;
 
-	const pos = {
+	stage.position({
 		x: centerScreenX - cx * scale,
-		y: centerScreenY + cy * scale, // 因为 y 轴是反的，所以这里是 +
-	};
-	stage.position(pos);
+		y: centerScreenY + cy * scale,
+	});
 	stage.batchDraw();
 };
 
@@ -301,11 +323,12 @@ const changeDemo = () => {
 		<div ref="toolbarRef" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px">
 			<label for="demo-select">Demo：</label>
 			<select id="demo-select" v-model.number="selectedDemoIndex" style="padding: 4px 8px" @change="changeDemo">
-				<option v-for="(_, i) in demoData1" :key="i" :value="i">demo{{ i + 1 }}</option>
+				<option v-for="(demo, i) in demoData1" :key="demo.code" :value="i">{{ demo.code }}</option>
 			</select>
 			<button @click="changeDemo" style="margin-left: 12px">
 				<div>测试</div>
 			</button>
+			<span style="margin-left: 12px; color: #666; font-size: 13px">左：洪水算法 · 右：扫描线（彩色实线=切分带实边 · 红虚线=虚拟线）</span>
 			<!-- 这里增加一个油漆桶选择颜色功能 -->
 			<input type="color" v-model="selectedColor" />
 			<!-- <button @click="nextStep" style="margin-left: 12px">
