@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { Segment, Arc } from '@flatten-js/core';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { findPolygons } from './findEnclosedShapes';
 import canvasObserver from './canvasOserver';
 import { demoData } from './demoData';
 import { Point } from '@flatten-js/core';
@@ -13,13 +12,8 @@ const selectedDemoIndex = ref(0);
 const demoData1 = [...demoData].reverse();
 const shapes = computed(() => demoData1[selectedDemoIndex.value].shapes);
 
-const toolbarRef = ref<HTMLElement | null>(null);
-const canvasHeight = ref(0);
-
-const updateCanvasSize = () => {
-	const toolbarHeight = toolbarRef.value?.offsetHeight ?? 0;
-	canvasHeight.value = window.innerHeight - toolbarHeight;
-};
+const containerRef = ref<HTMLDivElement | null>(null);
+let resizeObserver: ResizeObserver | null = null;
 
 // 鼠标滚轮缩放
 const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
@@ -62,20 +56,45 @@ const handleMouseDown = (x: number, y: number) => {
 	selectedPoint = new Point(x, y);
 	test(false);
 };
+
+// Ctrl + 左右方向键切换测试用例
+const handleKeyDown = (e: KeyboardEvent) => {
+	if (!e.ctrlKey) return;
+	if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+	e.preventDefault();
+	const total = demoData1.length;
+	if (total === 0) return;
+	selectedDemoIndex.value = e.key === 'ArrowLeft' ? (selectedDemoIndex.value - 1 + total) % total : (selectedDemoIndex.value + 1) % total;
+	changeDemo();
+};
+
 onMounted(() => {
-	updateCanvasSize();
+	window.addEventListener('keydown', handleKeyDown);
 	nextTick(() => {
-		const container = document.getElementById('container') as HTMLDivElement;
+		const container = containerRef.value;
+		if (!container) return;
 		canvasObserver.init(container, handleMouseDown);
 		canvasObserver.stage.on('wheel', handleWheel);
+
+		resizeObserver = new ResizeObserver(() => {
+			const stage = canvasObserver.stage;
+			if (!stage) return;
+			stage.size({ width: container.clientWidth, height: container.clientHeight });
+			stage.batchDraw();
+		});
+		resizeObserver.observe(container);
+
+		changeDemo();
 	});
 });
 
 onBeforeUnmount(() => {
+	resizeObserver?.disconnect();
+	resizeObserver = null;
 	if (canvasObserver.stage) {
 		canvasObserver.stage.off('wheel', handleWheel);
 	}
-	// window.removeEventListener('resize', updateCanvasSize);
+	window.removeEventListener('keydown', handleKeyDown);
 });
 
 const planColors = [
@@ -116,9 +135,6 @@ const getShapesBounds = (list: (Segment | Arc)[]) => {
 	});
 	return { minX, maxX, minY, maxY };
 };
-
-/** 扫描线结果相对洪水算法结果的水平偏移量（随当前 demo 包围盒计算） */
-let scanLineOffsetX = 0;
 
 const addPolygonShapes = (group: Konva.Group, polygons: any[], hitPoint: Point | null) => {
 	polygons.forEach((polygon, index) => {
@@ -239,31 +255,20 @@ const test = (isClear: boolean = false) => {
 	const list = shapes.value;
 	const bounds = getShapesBounds(list);
 	const worldWidth = bounds.maxX - bounds.minX;
-	scanLineOffsetX = Number.isFinite(worldWidth) && worldWidth > 0 ? worldWidth + Math.max(worldWidth * 0.2, 100) : 500;
+	if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
 
 	const scanPolygons = getPolygons(list);
-	const { polygons: floodPolygons } = findPolygons.findPolygons(list);
 
-	// 左侧：洪水算法；右侧：扫描线（水平偏移，避免重叠）
-	const floodGroup = new Konva.Group({ draggable: true });
-	const scanGroup = new Konva.Group({ draggable: true, x: scanLineOffsetX });
+	const group = new Konva.Group({ draggable: true });
 
-	const floodHitPoint = selectedPoint;
-	const scanHitPoint =
-		selectedPoint != null ? new Point(selectedPoint.x - scanLineOffsetX, selectedPoint.y) : null;
+	addPolygonShapes(group, scanPolygons, selectedPoint);
+	addEdgeShapes(group, list);
 
-	addPolygonShapes(floodGroup, floodPolygons, floodHitPoint);
-	addEdgeShapes(floodGroup, list);
-
-	addPolygonShapes(scanGroup, scanPolygons, scanHitPoint);
-	addEdgeShapes(scanGroup, list);
-
-	canvasObserver.layer.add(floodGroup);
-	canvasObserver.layer.add(scanGroup);
+	canvasObserver.layer.add(group);
 	canvasObserver.stage.draw();
 };
 
-// 根据当前图形自动缩放并居中（包含左侧洪水结果 + 右侧扫描线结果）
+// 根据当前图形自动缩放并居中
 const fitViewToShapes = () => {
 	const stage = canvasObserver.stage;
 	if (!stage) return;
@@ -273,14 +278,8 @@ const fitViewToShapes = () => {
 	const { minX, maxX, minY, maxY } = getShapesBounds(list);
 	if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) return;
 
-	// 右侧扫描线组已水平偏移，扩展包围盒
-	const viewMinX = minX;
-	const viewMaxX = maxX + scanLineOffsetX;
-	const viewMinY = minY;
-	const viewMaxY = maxY;
-
-	const worldWidth = viewMaxX - viewMinX;
-	const worldHeight = viewMaxY - viewMinY;
+	const worldWidth = maxX - minX;
+	const worldHeight = maxY - minY;
 	if (worldWidth === 0 || worldHeight === 0) return;
 
 	const canvasWidth = stage.width();
@@ -288,7 +287,7 @@ const fitViewToShapes = () => {
 	const canvasMin = Math.min(canvasWidth, canvasHeight);
 
 	const worldMin = Math.min(worldWidth, worldHeight);
-	const targetScreenSize = canvasMin * 0.2;
+	const targetScreenSize = canvasMin * 0.8;
 	let scale = targetScreenSize / worldMin;
 
 	const minScale = 0.1;
@@ -297,8 +296,8 @@ const fitViewToShapes = () => {
 
 	stage.scale({ x: scale, y: -scale });
 
-	const cx = (viewMinX + viewMaxX) / 2;
-	const cy = (viewMinY + viewMaxY) / 2;
+	const cx = (minX + maxX) / 2;
+	const cy = (minY + maxY) / 2;
 	const centerScreenX = canvasWidth / 2;
 	const centerScreenY = canvasHeight / 2;
 
@@ -319,8 +318,8 @@ const changeDemo = () => {
 </script>
 
 <template>
-	<div style="display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; height: 100vh; width: 100vw; gap: 12px">
-		<div ref="toolbarRef" style="display: flex; align-items: center; gap: 8px; padding: 8px 16px">
+	<div class="flood-page">
+		<div class="toolbar">
 			<label for="demo-select">Demo：</label>
 			<select id="demo-select" v-model.number="selectedDemoIndex" style="padding: 4px 8px" @change="changeDemo">
 				<option v-for="(demo, i) in demoData1" :key="demo.code" :value="i">{{ demo.code }}</option>
@@ -328,15 +327,37 @@ const changeDemo = () => {
 			<button @click="changeDemo" style="margin-left: 12px">
 				<div>测试</div>
 			</button>
-			<span style="margin-left: 12px; color: #666; font-size: 13px">左：洪水算法 · 右：扫描线（彩色实线=切分带实边 · 红虚线=虚拟线）</span>
+			<span style="margin-left: 12px; color: #666; font-size: 13px">扫描线（彩色实线=切分带实边 · 红虚线=虚拟线）</span>
 			<!-- 这里增加一个油漆桶选择颜色功能 -->
 			<input type="color" v-model="selectedColor" />
 			<!-- <button @click="nextStep" style="margin-left: 12px">
 				<div>下一步</div>
 			</button> -->
 		</div>
-		<div id="container" :style="{ width: '100vw', height: canvasHeight + 'px' }"></div>
+		<div ref="containerRef" class="canvas-container"></div>
 	</div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.flood-page {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+}
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 16px;
+	flex-shrink: 0;
+}
+.canvas-container {
+	flex: 1;
+	width: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+</style>

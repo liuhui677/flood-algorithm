@@ -17,6 +17,9 @@ importers:
       vue:
         specifier: ^3.5.27
         version: 3.5.27
+      vue-router:
+        specifier: ^4.6.4
+        version: 4.6.4(vue@3.5.27)
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.3
@@ -531,6 +534,9 @@ packages:
   '@vue/compiler-ssr@3.5.27':
     resolution: {integrity: sha512-Sj7h+JHt512fV1cTxKlYhg7qxBvack+BGncSpH+8vnN+KN95iPIcqB5rsbblX40XorP+ilO7VIKlkuu3Xq2vjw==}
 
+  '@vue/devtools-api@6.6.4':
+    resolution: {integrity: sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g==}
+
   '@vue/devtools-core@8.0.5':
     resolution: {integrity: sha512-dpCw8nl0GDBuiL9SaY0mtDxoGIEmU38w+TQiYEPOLhW03VDC0lfNMYXS/qhl4I0YlysGp04NLY4UNn6xgD0VIQ==}
     peerDependencies:
@@ -821,6 +827,7 @@ packages:
     engines: {node: '>=v14.21.3'}
     peerDependencies:
       vite: ^6.0.0 || ^7.0.0-0
+      vue: '*'
 
   vite-plugin-vue-inspector@5.3.2:
     resolution: {integrity: sha512-YvEKooQcSiBTAs0DoYLfefNja9bLgkFM7NI2b07bE2SruuvX0MEa9cMaxjKVMkeCp5Nz9FRIdcN1rOdFVBeL6Q==}
@@ -866,6 +873,11 @@ packages:
         optional: true
       yaml:
         optional: true
+
+  vue-router@4.6.4:
+    resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
+    peerDependencies:
+      vue: ^3.5.0
 
   vue@3.5.27:
     resolution: {integrity: sha512-aJ/UtoEyFySPBGarREmN4z6qNKpbEguYHMmXSiOGk69czc+zhs0NF6tEFrY8TZKAl8N/LYAkd4JHVd5E/AsSmw==}
@@ -1324,6 +1336,8 @@ snapshots:
       '@vue/compiler-dom': 3.5.27
       '@vue/shared': 3.5.27
 
+  '@vue/devtools-api@6.6.4': {}
+
   '@vue/devtools-core@8.0.5(vite@7.3.1)(vue@3.5.27)':
     dependencies:
       '@vue/devtools-kit': 8.0.5
@@ -1633,10 +1647,10 @@ snapshots:
       vite: 7.3.1
       vite-plugin-inspect: 11.3.3(vite@7.3.1)
       vite-plugin-vue-inspector: 5.3.2(vite@7.3.1)
+      vue: 3.5.27
     transitivePeerDependencies:
       - '@nuxt/kit'
       - supports-color
-      - vue
 
   vite-plugin-vue-inspector@5.3.2(vite@7.3.1):
     dependencies:
@@ -1663,6 +1677,11 @@ snapshots:
       tinyglobby: 0.2.15
     optionalDependencies:
       fsevents: 2.3.3
+
+  vue-router@4.6.4(vue@3.5.27):
+    dependencies:
+      '@vue/devtools-api': 6.6.4
+      vue: 3.5.27
 
   vue@3.5.27:
     dependencies:
